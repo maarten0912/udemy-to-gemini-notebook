@@ -23,8 +23,8 @@ with its question count.
 3. Keep related topics together so each episode feels like a coherent lesson (for example all
    streaming topics together, all security topics together), and order the episodes so that the
    learning builds up where that makes sense.
-4. Give each episode a short, descriptive title (3-8 words). It becomes the folder name and the
-   name shown to the user.
+4. Give each episode a short, descriptive title (3-8 words). It is the name shown to the user in
+   the plan and in `HOW_TO_USE.md`.
 
 ## Procedure
 

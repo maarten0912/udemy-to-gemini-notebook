@@ -3,21 +3,24 @@
 
   python3 scripts/udemy.py import  <udemy-xxx.json> [--name NAME]   # file downloaded by browser/extract.js
   python3 scripts/udemy.py plan    <name> [--exclude 2 3]          # total questions + episode size options
-  python3 scripts/udemy.py prepare <name> --episodes N [--exclude 2 3] [--exam T] [--subject T]
+  python3 scripts/udemy.py prepare <name> --episodes N [--size long|default|short] [--exclude 2 3]
+                                   [--exam T] [--subject T]
   python3 scripts/udemy.py images  <name>                           # downloads question images to describe
   python3 scripts/udemy.py check   <name>                           # validates topics.json + episode grouping
   python3 scripts/udemy.py build   <name>                           # writes sources/ + HOW_TO_USE.md
 
 One Gemini Notebook = one "notebook" folder with N podcast EPISODES. The number of episodes is
-decided up front from the total number of questions (tests only matter for leaving some out). The
-questions are grouped into topics (AI step), the topics are grouped into the N episodes (work/episodes.json,
-or automatically), and each episode's source files live in their own folder: in Gemini Notebook you
-select exactly those files to generate that episode's Audio Overview. All commands after `prepare`
-take an optional `--notebook NAME` (default: notebook) if you keep several plans for one course.
+decided up front from the total number of questions (tests only matter for leaving some out), together
+with the episode size (long, default or short), which also sets the Audio Overview length (Longer,
+Default or Shorter). The questions are grouped into topics (AI step), the topics are grouped into the
+N episodes (work/episodes.json, or automatically). All source files go into ONE flat folder (Gemini
+Notebook can't upload folders); the file names start with E1_, E2_, ... and in Gemini Notebook you
+select exactly one episode's files to generate that episode's Audio Overview. All commands after
+`prepare` take an optional `--notebook NAME` (default: notebook) to keep several plans per course.
 
 Folders (both git-ignored, they hold copyrighted course content):
   data/<name>/                    imported tests (tests/testN.json) and the original download
-  output/<name>/<notebook>/       notebook.json, work/, sources/E1_<title>/*.md, ..., HOW_TO_USE.md
+  output/<name>/<notebook>/       notebook.json, work/, sources/E1_01_<topic>.md, ..., HOW_TO_USE.md
 """
 import argparse
 import json
@@ -40,6 +43,8 @@ MAX_TOPIC = 16  # topics larger than this are split into parts in build
 SIZES = {"long": 90, "default": 45, "short": 20}
 RECOMMENDED = "default"
 MIN_PER_QUESTION = 0.75
+# The size name the user picks also decides the Audio Overview length setting in Gemini Notebook.
+SETTING = {"long": "Longer", "default": "Default", "short": "Shorter"}
 
 
 # ---------------------------------------------------------------- html -> text
@@ -176,9 +181,14 @@ def available_tests(name):
     return tests
 
 
-def length_setting(n_questions):
-    """Which Audio Overview length setting to pick in Gemini Notebook for an episode of this size."""
-    return "Shorter" if n_questions < 15 else "Default" if n_questions < 35 else "Longer"
+def nearest_size(per_episode):
+    """Size name closest to a custom episode size (when the user names a number of episodes)."""
+    return min(SIZES, key=lambda k: abs(per_episode - SIZES[k]))
+
+
+def notebook_length(cfg):
+    """Audio Overview length setting for every episode of this notebook."""
+    return SETTING[cfg.get("size", RECOMMENDED)]
 
 
 def approx_minutes(n_questions):
@@ -204,11 +214,13 @@ def cmd_plan(args):
     for n, keys in options.items():
         per = round(total / n)
         print(f"  {n} {' / '.join(keys)} episode(s) of about {per} questions, roughly {approx_minutes(per)} min each, "
-              f"Audio Overview length {length_setting(per)}" + ("   <-- recommended" if RECOMMENDED in keys else ""))
+              f"Audio Overview length {' / '.join(SETTING[k] for k in keys)}"
+              + ("   <-- recommended" if RECOMMENDED in keys else ""))
     print("Now continue with AGENTS.md, step 3: use its exact wording to ask the user (leave out tests? how many "
-          "episodes? exam and subject?). Then run:")
+          "episodes? exam and subject?). Then run (add --size <long|default|short> if the user picked a size name):")
     ex = " --exclude " + " ".join(map(str, excluded)) if excluded else ""
-    print(f"  python3 scripts/udemy.py prepare {args.name} --episodes <N>{ex} --exam \"<exam>\" --subject \"<subject>\"")
+    print(f"  python3 scripts/udemy.py prepare {args.name} --episodes <N> --size <size>{ex} "
+          "--exam \"<exam>\" --subject \"<subject>\"")
 
 
 # ---------------------------------------------------------------- notebook config
@@ -268,8 +280,10 @@ def cmd_prepare(args):
         sys.exit("--episodes must be at least 1 (run 'plan' for options)")
     course_file = DATA / args.name / "course.json"
     title = json.load(open(course_file))["title"] if course_file.exists() else args.name
+    per = round(sum(tests[t][1] for t in included) / args.episodes)
+    size = args.size or nearest_size(per)  # the size name decides the Audio Overview length setting
     cfg = {"exam": args.exam or title, "subject": args.subject or args.exam or title,
-           "tests": included, "excluded": excluded, "episodes": args.episodes}
+           "tests": included, "excluded": excluded, "episodes": args.episodes, "size": size}
     d = OUT / args.name / args.notebook
     (d / "work").mkdir(parents=True, exist_ok=True)
     json.dump(cfg, open(d / "notebook.json", "w"), indent=1, ensure_ascii=False)
@@ -287,11 +301,10 @@ def cmd_prepare(args):
             ans = "; ".join(re.sub(r"\s+", " ", plain(o["text"]))[:120] for o in correct_opts(q))
             lines.append(f"{q['qid']} [{q.get('domain') or '-'}] Q: {text} A: {ans}")
         (d / "work" / f"questions_{n}.txt").write_text("\n".join(lines) + "\n")
-    per = round(len(qs) / args.episodes)
     print(f"Notebook plan '{args.notebook}': {len(qs)} questions"
           + (f" (tests {', '.join(map(str, excluded))} left out)" if excluded else "")
-          + f" -> {args.episodes} episode(s) of about {per} questions, roughly {approx_minutes(per)} min each, "
-          f"Audio Overview length {length_setting(per)}. Question chunks ({len(chunks)}) -> {d / 'work'}")
+          + f" -> {args.episodes} {size} episode(s) of about {per} questions, roughly {approx_minutes(per)} min each, "
+          f"Audio Overview length {SETTING[size]}. Question chunks ({len(chunks)}) -> {d / 'work'}")
     n_img = sum(1 for q in qs if q.get("images"))
     if n_img:
         print(f"{n_img} question(s) contain images: after tagging, run 'images {args.name}' "
@@ -402,7 +415,7 @@ def cmd_check(args):
     sizes = {i: sum(len(groups[t]) for t in p["topics"] if t in groups) for i, p in plan.items()}
     for i in sorted(plan):
         print(f"  episode {i}: {plan[i]['title']} - {sizes[i]} questions, {len(plan[i]['topics'])} topics, "
-              f"Audio Overview length {length_setting(sizes[i])}")
+              f"Audio Overview length {notebook_length(cfg)}")
     avg = sum(sizes.values()) / max(1, len(sizes))
     if any(s < 0.7 * avg or s > 1.3 * avg for s in sizes.values()):
         print("NOTE: episode sizes differ by more than 30%; consider moving a topic to balance them.")
@@ -481,27 +494,29 @@ def how_to_use(cfg, episodes):
     n_files = sum(len(e["files"]) for e in episodes)
     lines = [
         "# Make your podcast episodes in Gemini Notebook", "",
-        f"You get **one Gemini Notebook** that holds all sources. Each episode is one Audio Overview made from "
-        f"one group of sources: the folder `sources/E<n>_...` of that episode. Their file names start with `E<n>_`, "
-        "so you can tell them apart in the notebook.", "",
+        "You get **one Gemini Notebook** that holds all sources. You upload all files once, then generate the "
+        "episodes one by one. Each episode is one Audio Overview made from one group of sources: the files whose "
+        "names start with that episode's prefix (`E1_`, `E2_`, ...).", "",
         "1. Go to https://notebook.google.com and sign in with a Google account.",
         "2. Create a new notebook.",
-        f"3. Add sources: upload all {n_files} files from the `sources/` folder (all episode folders).",
-        "4. Make episode 1: in the notebook's source list select **only** the files whose names start with `E1_` "
-        "(untick the others). Open **Audio Overview**, click the customize (pencil) button, set Format to "
-        "**Deep Dive** and Length as in the table below, paste the focus text below into \"What should the AI hosts "
-        "focus on in this episode?\", then Generate.",
+        f"3. Add sources: upload all {n_files} files from the `sources/` folder in one go (folders can't be "
+        "uploaded, so they are all in the same folder).",
+        "4. Generate episode 1: in the notebook's source list select **only** the files whose names start with "
+        "`E1_` (untick the others), click **Audio Overview**, set Format to **Deep Dive** and Length as in the "
+        "table below, paste the focus text below into \"What should the AI hosts focus on in this episode?\", "
+        "then Generate.",
         "5. Repeat for each other episode with its own files (`E2_`, `E3_`, ...). Each episode takes a few minutes; "
         "Google may limit how many you can generate per day.", "",
         "## Episodes", "",
-        "| Episode | Title | Source folder | Questions | Files | Audio Overview length |",
+        "| Episode | Title | File names start with | Questions | Files | Audio Overview length |",
         "|---|---|---|---|---|---|"]
     for e in episodes:
-        lines.append(f"| {e['number']} | {e['title']} | `sources/{e['folder']}/` | {e['questions']} | "
-                     f"{len(e['files'])} | {length_setting(e['questions'])} |")
-    lines += ["", "Rough guide (a guess, calibrate with your first episode): about 20 questions make roughly 15 "
-              "minutes, 45 questions about 35 minutes, 90 questions about 70 minutes. If the hosts skip questions "
-              "or an episode gets too long, use fewer questions per episode next time.", "",
+        lines.append(f"| {e['number']} | {e['title']} | `E{e['number']}_` | {e['questions']} | "
+                     f"{len(e['files'])} | {notebook_length(cfg)} |")
+    lines += ["", "Rough guide (a guess, calibrate with your first episode): short episodes (about 20 questions, "
+              "length Shorter) make roughly 15 minutes, default ones (about 45 questions, length Default) about "
+              "35 minutes, long ones (about 90 questions, length Longer) about 70 minutes. If the hosts skip "
+              "questions or an episode gets too long, use fewer questions per episode next time.", "",
               "## Text for the focus box (same for every episode)", "", FOCUS.format(**fill), "",
               "Shorter version (if the box rejects the long one):", "", FOCUS_SHORT.format(**fill), "",
               "## Topics per episode", ""]
@@ -543,30 +558,22 @@ def cmd_build(args):
             size = math.ceil(len(items) / parts)
             for p in range(parts):
                 final[f"{title} (Part {p + 1} of {parts})"] = items[p * size:(p + 1) * size]
-        words, short = slug(ep["title"]).split("-"), ""
-        for w in words:  # cut at a word boundary, folder names stay readable
-            if len(short) + len(w) + 1 > 40:
-                break
-            short = f"{short}-{w}" if short else w
-        folder = f"E{number}_{short}" if short else f"E{number}"
-        (sources / folder).mkdir()
-        files = []
+        files = []  # all files go flat into sources/ (Gemini Notebook can't upload folders)
         index.append(f"\n## Episode {number}: {ep['title']}")
         for n, title in enumerate(sorted(final), 1):
             items = final[title]
-            path = sources / folder / f"E{ep['number']}_{n:02d}_{slug(title)}.md"
+            path = sources / f"E{number}_{n:02d}_{slug(title)}.md"
             path.write_text(source_text(cfg, ep, title, items, desc, missing_imgs))
             files.append((path.name, title, len(items)))
             index.append(f"- {path.name}: {len(items)} questions, {len(path.read_text().split())} words — "
                          + ", ".join(q["qid"] for q in items))
-        episodes.append({"number": number, "title": ep["title"], "folder": folder,
-                         "questions": len(eq), "files": files})
+        episodes.append({"number": number, "title": ep["title"], "questions": len(eq), "files": files})
     (cfg["dir"] / "work" / "source_index.md").write_text("\n".join(index) + "\n")
     (cfg["dir"] / "HOW_TO_USE.md").write_text(how_to_use(cfg, episodes))
     print(f"{len(episodes)} episode(s), {sum(len(e['files']) for e in episodes)} source files -> {sources}")
     for e in episodes:
         print(f"  episode {e['number']} ({e['title']}): {e['questions']} questions, {len(e['files'])} files, "
-              f"length {length_setting(e['questions'])}")
+              f"length {notebook_length(cfg)}")
     print(f"Instructions for the user -> {cfg['dir'] / 'HOW_TO_USE.md'}")
     if missing_imgs:
         print(f"WARNING: {len(missing_imgs)} image(s) have no description and read as 'not available' "
@@ -585,6 +592,8 @@ def main():
     pr = sub.add_parser("prepare")
     pr.add_argument("name")
     pr.add_argument("--episodes", type=int, required=True, help="number of podcast episodes (see 'plan')")
+    pr.add_argument("--size", choices=sorted(SIZES), help="episode size the user picked; sets the Audio "
+                    "Overview length (short=Shorter, default=Default, long=Longer). Default: nearest to --episodes")
     pr.add_argument("--exclude", type=int, nargs="+", metavar="TEST", help="tests to leave out entirely")
     pr.add_argument("--notebook", default="notebook")
     pr.add_argument("--exam", help="what the listener is preparing for (default: course title)")

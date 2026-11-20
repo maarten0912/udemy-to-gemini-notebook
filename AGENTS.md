@@ -8,7 +8,9 @@ only a human can do. Read the whole file before you start.
 What the app does: the practice tests of a Udemy course the user is enrolled in -> study files grouped
 by topic -> the user uploads them to one Gemini Notebook (notebook.google.com), which turns them into
 podcast episodes. An **episode** is one Audio Overview (one podcast) in Gemini Notebook, generated from
-a group of questions. All episodes live in **one notebook**; each episode has its own source folder.
+a group of questions. All episodes live in **one notebook**. All source files are uploaded together
+(Gemini Notebook can't upload folders); the file-name prefix `E1_`, `E2_`, ... says which episode a
+file belongs to, and the user selects one episode's files when generating it.
 
 ## Rules (they matter more than anything below)
 
@@ -133,9 +135,11 @@ always go together: the user picks one option and gets both. Mark the line marke
 > **Which do you prefer? Reply "long", "default" or "short", or a number of episodes if you want
 > something else.**
 
-Map the answer to the number of episodes `<N>`. If they give their own number, tell them in one short
-sentence the resulting size ("that's about <per> questions, roughly <minutes> minutes per episode")
-and continue.
+Map the answer to the number of episodes `<N>` and **remember the size name they picked** (long,
+default or short). The size name also decides the Audio Overview length used in Step 6 (long = Longer,
+default = Default, short = Shorter), so it must reach `prepare`. If they give their own number
+instead, tell them in one short sentence the resulting size ("that's about <per> questions, roughly
+<minutes> minutes per episode") and continue; `prepare` then picks the nearest size name itself.
 
 Then SAY and ASK (question C). For `<exam>` use the course title unless it is obviously long or
 unclear, then a short natural name; `<subject>` is the technology or field (e.g. "AWS", "Databricks"):
@@ -145,8 +149,9 @@ unclear, then a short natural name; `<subject>` is the technology or field (e.g.
 >
 > **Reply "ok", or tell me the exam name and the subject area you'd like.**
 
-DO: `python3 scripts/udemy.py prepare <name> --episodes <N> [--exclude ...] --exam "<exam>" --subject "<subject>"`.
-Remember if it reported images in questions.
+DO: `python3 scripts/udemy.py prepare <name> --episodes <N> [--size <long|default|short>] [--exclude ...] --exam "<exam>" --subject "<subject>"`
+(pass `--size` whenever the user picked a size name). Remember the "Audio Overview length" it prints,
+and whether it reported images in questions.
 
 ## Step 4 of 6: sort the questions by topic
 
@@ -200,24 +205,27 @@ Linux `xdg-open`) and copy the **long** focus text from `output/<name>/notebook/
 SAY and ASK:
 
 > **Step 6 of 6: make your podcasts in Gemini Notebook.** Your files are ready; I opened the folder
-> that holds them. One Gemini Notebook holds all episodes:
+> that holds them. One Gemini Notebook holds all episodes: you upload all files once, then we generate
+> the episodes one by one.
 >
 > 1. Go to https://notebook.google.com and sign in with a Google account.
 > 2. Create a new notebook.
-> 3. Add sources: upload all <total files> files from the folders I opened (one folder per episode;
->    every file name starts with `E1_`, `E2_`, ... so you can tell the episodes apart).
+> 3. Add sources: upload all <total files> files from the folder I opened. Every file name starts with
+>    `E1_`, `E2_`, ... so we can pick each episode's files later.
 >
 > **Reply "uploaded" when all files are in the notebook.**
 
 Then, for each episode in turn, SAY and ASK (the focus text is already on the clipboard; if the user
-copied something else meanwhile, copy it again first):
+copied something else meanwhile, copy it again first). `<length>` is the "Audio Overview length" that
+`prepare` printed (also in the table of `HOW_TO_USE.md`): Longer, Default or Shorter. It is the same for
+every episode and follows the size the user picked in Step 3. Never choose it yourself:
 
 > **Episode <n> of <N>: <title>** (<number of questions> questions)
 >
 > 1. In the notebook's source list, select **only** the files whose names start with `E<n>_` and
 >    untick all the others.
-> 2. Open **Audio Overview** and click the customize (pencil) button.
-> 3. Set the format to **Deep Dive** and the length to **<Longer | Default | Shorter>**.
+> 2. Click **Audio Overview**.
+> 3. Set the format to **Deep Dive** and the length to **<length>**.
 > 4. Paste the text I copied to your clipboard into the box "What should the AI hosts focus on in this
 >    episode?" (If the box says it's too long, tell me and I'll give you a shorter version.)
 > 5. Click Generate. It takes a few minutes, and Google may limit how many you can generate per day.
@@ -250,11 +258,12 @@ When all episodes are done, SAY:
   (keep it that way, no dependencies), `prompts/` holds the agent's AI tasks (`tag_topics.md`,
   `describe_images.md`, `plan_episodes.md`).
 - Data formats: `data/<name>/tests/testN.json` (normalized questions), `output/<name>/notebook/`
-  (`notebook.json` with the number of episodes and left-out tests, `work/` with `topics.json` and
-  `episodes.json`, `sources/E<n>_<title>/`, `HOW_TO_USE.md`). `--notebook NAME` on the commands keeps
-  several plans for the same course side by side.
-- Tuning knobs: episode sizes, minutes per question and the recommended size live at the top of
-  `scripts/udemy.py` (`SIZES`, `RECOMMENDED`, `MIN_PER_QUESTION`); the Audio Overview length rule is
-  `length_setting`.
+  (`notebook.json` with the number of episodes, size and left-out tests, `work/` with `topics.json` and
+  `episodes.json`, `sources/E<n>_<nn>_<topic>.md` all in ONE flat folder because Gemini Notebook can't
+  upload folders, `HOW_TO_USE.md`). `--notebook NAME` on the commands keeps several plans for the same
+  course side by side.
+- Tuning knobs: episode sizes, minutes per question, the recommended size and the size name -> Audio
+  Overview length mapping live at the top of `scripts/udemy.py` (`SIZES`, `RECOMMENDED`,
+  `MIN_PER_QUESTION`, `SETTING`).
 - This playbook is deliberately a strict script because weaker agents improvise. When you change a
   step, keep the SAY/ASK texts self-explanatory and keep the "ask only what is listed" rule.

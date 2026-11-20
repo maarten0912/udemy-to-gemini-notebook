@@ -12,7 +12,7 @@ question id to a topic name, e.g. `{"4-1": "Messaging – Queues and Delivery", 
 
 ## Why
 
-Each topic becomes one source file inside an episode's folder (an episode is one podcast made
+Each topic becomes one source file belonging to an episode (an episode is one podcast made
 from a group of whole topics), and must teach one coherent concept. Gemini Notebook covers small,
 focused documents completely, but only skims big mixed ones. That is why questions are grouped
 by concept instead of by test. You tag all questions in one go; the next step
