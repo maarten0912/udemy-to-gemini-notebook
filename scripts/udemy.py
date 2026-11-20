@@ -205,7 +205,8 @@ def cmd_plan(args):
         per = round(total / n)
         print(f"  {n} {' / '.join(keys)} episode(s) of about {per} questions, roughly {approx_minutes(per)} min each, "
               f"Audio Overview length {length_setting(per)}" + ("   <-- recommended" if RECOMMENDED in keys else ""))
-    print("Ask the user: which tests (if any) to leave out, and how many episodes they want. Then run:")
+    print("Now continue with AGENTS.md, step 3: use its exact wording to ask the user (leave out tests? how many "
+          "episodes? exam and subject?). Then run:")
     ex = " --exclude " + " ".join(map(str, excluded)) if excluded else ""
     print(f"  python3 scripts/udemy.py prepare {args.name} --episodes <N>{ex} --exam \"<exam>\" --subject \"<subject>\"")
 
