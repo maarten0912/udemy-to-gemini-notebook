@@ -50,35 +50,42 @@ Step 1 text:
 
 ## Step 1 of 6: get the practice tests out of Udemy
 
-DO: copy `browser/extract.js` to the clipboard yourself (macOS `pbcopy < browser/extract.js`, Windows
-`clip < browser\extract.js`, Linux `xclip -selection clipboard < browser/extract.js`). If that fails,
-tell the user to open the file and copy its contents.
+DO, before writing anything (the user must not see any of this):
 
-SAY and ASK (one message):
+1. Copy `browser/extract.js` to the clipboard (macOS `pbcopy < browser/extract.js`, Windows
+   `clip < browser\extract.js`, Linux `xclip -selection clipboard < browser/extract.js`). If that
+   fails, tell the user to open the file and copy its contents.
+2. Find out the operating system and the default web browser (macOS: `defaults read
+   com.apple.LaunchServices/com.apple.launchservices.secure LSHandlers`, look for the `https` handler,
+   none means Safari; Windows PowerShell: `(Get-ItemProperty
+   HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice).ProgId`;
+   Linux: `xdg-settings get default-web-browser`).
+3. Fill the three placeholders of the message below from this table:
+
+| Browser | `<console>` | `<paste>` |
+|---|---|---|
+| Chrome, Edge, Brave, Arc, Opera | Mac: `Cmd+Option+J`, otherwise `Ctrl+Shift+J` | `Cmd+V` or `Ctrl+V` per OS, plus: "If it says pasting is blocked, type `allow pasting`, press Enter and paste again." |
+| Firefox | Mac: `Cmd+Option+K`, otherwise `Ctrl+Shift+K` | same as above |
+| Safari | first turn on Safari > Settings > Advanced > "Show features for web developers", then press `Cmd+Option+C` (Safari may ask to allow the download later: allow it) | `Cmd+V` |
+| unknown | `F12`, then the Console tab | `Ctrl+V` |
+
+SAY and ASK (one message, exactly this short; fill in `<browser>`):
 
 > **Step 1 of 6: get the practice tests out of Udemy**
 >
-> I've copied a small script to your clipboard. It only reads your course's practice tests from
-> udemy.com (the same requests the course player makes), saves them as one file in your Downloads
-> folder, and sends nothing anywhere else. Please:
+> I copied a small script to your clipboard. It reads your course's practice tests from udemy.com and
+> saves them as one file in your Downloads folder; it sends nothing anywhere else.
 >
-> 1. Open your Udemy course in your normal browser, logged in. Any page of the course works, as long
->    as the address contains `/course/`. (Deloitte Udemy Business: open
->    https://deloittedevelopment.udemy.com/home/my-courses/learning/ and click your course.)
-> 2. Open the browser's developer console. Chrome or Edge: press F12 (Mac: Cmd+Option+J) and pick the
->    **Console** tab. Firefox: Ctrl+Shift+K (Mac: Cmd+Option+K). Safari: first turn on Settings,
->    Advanced, "Show features for web developers", then press Cmd+Option+C.
-> 3. Paste (Ctrl+V or Cmd+V) and press Enter. If the browser says pasting is blocked, type
->    `allow pasting`, press Enter, and paste again. Ignore the red error lines from Udemy's own page.
-> 4. Wait until the console shows "Done: ...". A file `udemy-....json` lands in your Downloads folder
->    (Safari may ask to allow the download: allow it).
+> 1. Open your Udemy course in <browser> (logged in; any page whose address contains `/course/`).
+>    Deloitte Udemy Business: https://deloittedevelopment.udemy.com/home/my-courses/learning/
+> 2. Open the console: <console>
+> 3. Paste (<paste>) and press Enter. Ignore red error lines from Udemy's own page.
+> 4. Wait for "Done: ..." in the console. The file appears in Downloads.
 >
-> One heads-up: if you use Udemy Business and you are not enrolled in this course yet, the script
-> clicks the course's own Enroll button for you. That adds the course to your learning list, and your
-> organization may see it. On a personal Udemy account the script never enrolls; you'd enroll
-> yourself first.
+> Heads-up: if you use Udemy Business and aren't enrolled in this course yet, the script enrolls you
+> through the course's own Enroll button (your organization may see it).
 >
-> **Reply "done" when the file has downloaded, or "stop" if you don't want the script to enroll you.**
+> **Reply "done" when the file has downloaded, or "stop" if you don't want that.**
 
 If they reply "stop": SAY "No problem. Enroll in the course yourself in your browser, then tell me
 'done' and we'll continue with step 1." and go back to the ASK above when they are ready.
@@ -109,18 +116,26 @@ SAY and ASK (question A):
 >
 > **Do you want to leave out any specific test? Reply "none" or the test numbers (like "2").**
 
-DO: `python3 scripts/udemy.py plan <name>` (add `--exclude 2 ...` for left-out tests). Its output lists
-the options. Then SAY and ASK (question B), filling in the numbers from the output (recommended =
-the line marked `<-- recommended`; the "longer" and "shorter" options are the other two lines; leave
-out an option if it is identical to the recommended one):
+DO: `python3 scripts/udemy.py plan <name>` (add `--exclude 2 ...` for left-out tests). Its output has
+one line per option: the number of episodes, the size name (long, default or short; two names on one
+line mean the options coincide), questions per episode and minutes per episode. Then SAY and ASK
+(question B), one bullet per line of the output. The number of episodes and the length of an episode
+always go together: the user picks one option and gets both. Mark the line marked `<-- recommended`:
 
-> You have <total> questions to turn into episodes. My recommendation: **<N> episodes of about <per>
-> questions each (roughly <minutes> minutes per episode)**. The alternatives are <N_long> longer
-> episodes of about <per> questions (roughly <minutes> minutes each) or <N_short> shorter ones of about
-> <per> questions (roughly <minutes> minutes each). The lengths are my estimates; we can calibrate after
-> the first episode.
+> You have <total> questions. Here are the ways to split them into podcast episodes:
 >
-> **How many episodes do you want? Reply with a number, or "ok" for my recommendation.**
+> - **<N> long episodes**: about <per> questions each, roughly <minutes> minutes per episode
+> - **<N> default episodes**: about <per> questions each, roughly <minutes> minutes per episode (my recommendation)
+> - **<N> short episodes**: about <per> questions each, roughly <minutes> minutes per episode
+>
+> The lengths are my estimates; we can calibrate after the first episode.
+>
+> **Which do you prefer? Reply "long", "default" or "short", or a number of episodes if you want
+> something else.**
+
+Map the answer to the number of episodes `<N>`. If they give their own number, tell them in one short
+sentence the resulting size ("that's about <per> questions, roughly <minutes> minutes per episode")
+and continue.
 
 Then SAY and ASK (question C). For `<exam>` use the course title unless it is obviously long or
 unclear, then a short natural name; `<subject>` is the technology or field (e.g. "AWS", "Databricks"):
