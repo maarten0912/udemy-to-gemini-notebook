@@ -198,11 +198,13 @@ def cmd_plan(args):
     print(f"\n{total} questions to turn into episodes. Episodes are sized by question count only; tests only "
           "matter for leaving one out (e.g. one the user already took as a practice run: --exclude N).")
     print("Options (sizes are guesses, calibrate after the first episode):")
+    options = {}  # episode count -> size names that lead to it (small courses: long and default can coincide)
     for key in ("long", "default", "short"):
-        n = max(1, round(total / SIZES[key]))
+        options.setdefault(max(1, round(total / SIZES[key])), []).append(key)
+    for n, keys in options.items():
         per = round(total / n)
-        print(f"  {n} {key} episode(s) of about {per} questions, roughly {approx_minutes(per)} min each, "
-              f"Audio Overview length {length_setting(per)}" + ("   <-- recommended" if key == RECOMMENDED else ""))
+        print(f"  {n} {' / '.join(keys)} episode(s) of about {per} questions, roughly {approx_minutes(per)} min each, "
+              f"Audio Overview length {length_setting(per)}" + ("   <-- recommended" if RECOMMENDED in keys else ""))
     print("Ask the user: which tests (if any) to leave out, and how many episodes they want. Then run:")
     ex = " --exclude " + " ".join(map(str, excluded)) if excluded else ""
     print(f"  python3 scripts/udemy.py prepare {args.name} --episodes <N>{ex} --exam \"<exam>\" --subject \"<subject>\"")

@@ -10,6 +10,8 @@ Notebook (notebook.google.com) can turn into podcast episodes.
 The agent follows [`AGENTS.md`](AGENTS.md) and guides you step by step; you don't need to know
 anything technical. It needs Python 3 (the agent checks).
 
+The code is MIT licensed; the course content it processes is not part of this repository.
+
 For personal study only. Course content is copyrighted and Udemy's terms may restrict copying it:
 don't share or publish the generated files. Nothing leaves your computer except what you upload
 to Gemini Notebook yourself.
