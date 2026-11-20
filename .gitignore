@@ -1,0 +1,10 @@
+# Course content is copyrighted by its authors: never commit it.
+data/
+output/
+udemy-*.json
+*.bundle.json
+
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
