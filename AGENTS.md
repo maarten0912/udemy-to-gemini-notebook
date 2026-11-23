@@ -119,39 +119,45 @@ SAY and ASK (question A):
 > **Do you want to leave out any specific test? Reply "none" or the test numbers (like "2").**
 
 DO: `python3 scripts/udemy.py plan <name>` (add `--exclude 2 ...` for left-out tests). Its output has
-one line per option: the number of episodes, the size name (long, default or short; two names on one
-line mean the options coincide), questions per episode and minutes per episode. Then SAY and ASK
+one line per option: the number of episodes, the size name (long or default; two names on one line
+mean the options coincide), questions per episode and minutes per episode. Then SAY and ASK
 (question B), one bullet per line of the output. The number of episodes and the length of an episode
-always go together: the user picks one option and gets both. Mark the line marked `<-- recommended`:
+always go together: the user picks one option and gets both. The "short" size is not offered, but
+use it (`--size short`) if the user asks for shorter episodes:
 
 > You have <total> questions. Here are the ways to split them into podcast episodes:
 >
-> - **<N> long episodes**: about <per> questions each, roughly <minutes> minutes per episode
-> - **<N> default episodes**: about <per> questions each, roughly <minutes> minutes per episode (my recommendation)
-> - **<N> short episodes**: about <per> questions each, roughly <minutes> minutes per episode
+> - **<N> long episodes** (my recommendation): about <per> questions each, roughly <minutes> minutes per episode
+> - **<N> default episodes**: about <per> questions each, roughly <minutes> minutes per episode
 >
 > The lengths are my estimates; we can calibrate after the first episode.
 >
-> **Which do you prefer? Reply "long", "default" or "short", or a number of episodes if you want
-> something else.**
+> **Which do you prefer? Reply "long" or "default", or a number of episodes if you want something else.**
 
-Map the answer to the number of episodes `<N>` and **remember the size name they picked** (long,
-default or short). The size name also decides the Audio Overview length used in Step 6 (long = Longer,
+Map the answer to the number of episodes `<N>` and **remember the size name they picked** (long or
+default). The size name also decides the Audio Overview length used in Step 6 (long = Longer,
 default = Default, short = Shorter), so it must reach `prepare`. If they give their own number
 instead, tell them in one short sentence the resulting size ("that's about <per> questions, roughly
 <minutes> minutes per episode") and continue; `prepare` then picks the nearest size name itself.
 
-Then SAY and ASK (question C). For `<exam>` use the course title unless it is obviously long or
-unclear, then a short natural name; `<subject>` is the technology or field (e.g. "AWS", "Databricks"):
+Then SAY and ASK (question C). Choose `<exam>` and `<subject>` yourself from the course title: `<exam>`
+a short natural name (e.g. "AWS Certified Developer Associate", "Databricks Certified Data Engineer
+Professional"), `<subject>` the technology or field (e.g. "AWS", "Databricks"):
 
-> The podcast hosts need to know what you're preparing for, so they pitch it right. I'll use "<exam>"
-> as the exam and "<subject>" as the subject area.
+> The podcast hosts only get a short description of you as a listener, and Gemini Notebook works out
+> the rest by itself. My suggestion:
 >
-> **Reply "ok", or tell me the exam name and the subject area you'd like.**
+> "The listeners are preparing for the <exam> exam. They already have a good working knowledge of <subject>."
+>
+> It's just two sentences. The more personal you make them (your experience level, what you find hard),
+> the better the podcast fits you.
+>
+> **Reply "ok" to use it, or write your own version.**
 
-DO: `python3 scripts/udemy.py prepare <name> --episodes <N> [--size <long|default|short>] [--exclude ...] --exam "<exam>" --subject "<subject>"`
-(pass `--size` whenever the user picked a size name). Remember the "Audio Overview length" it prints,
-and whether it reported images in questions.
+DO: `python3 scripts/udemy.py prepare <name> --episodes <N> [--size <long|default|short>] [--exclude ...] --exam "<exam>" --subject "<subject>" [--focus "<the user's own text>"]`
+(pass `--size` whenever the user picked a size name; pass `--focus` only if the user wrote or changed the
+text, exactly as they wrote it). Remember the "Audio Overview length" it prints, and whether it
+reported images in questions.
 
 ## Step 4 of 6: sort the questions by topic
 
@@ -199,8 +205,8 @@ no stray URLs). Then continue straight to Step 6.
 ## Step 6 of 6: make the podcasts in Gemini Notebook (guided, one episode at a time)
 
 DO: open the folder `output/<name>/notebook/sources/` for the user (macOS `open`, Windows `explorer`,
-Linux `xdg-open`) and copy the **long** focus text from `output/<name>/notebook/HOW_TO_USE.md` (section
-"Text for the focus box") to the clipboard.
+Linux `xdg-open`) and copy the focus text from `output/<name>/notebook/HOW_TO_USE.md` (section "Text for
+the focus box", the two sentences the user agreed to in Step 3) to the clipboard.
 
 SAY and ASK:
 
@@ -227,7 +233,7 @@ every episode and follows the size the user picked in Step 3. Never choose it yo
 > 2. Click **Audio Overview**.
 > 3. Set the format to **Deep Dive** and the length to **<length>**.
 > 4. Paste the text I copied to your clipboard into the box "What should the AI hosts focus on in this
->    episode?" (If the box says it's too long, tell me and I'll give you a shorter version.)
+>    episode?"
 > 5. Click Generate. It takes a few minutes, and Google may limit how many you can generate per day.
 >
 > **Reply "next" when episode <n> is generating.**
@@ -262,8 +268,9 @@ When all episodes are done, SAY:
   `episodes.json`, `sources/E<n>_<nn>_<topic>.md` all in ONE flat folder because Gemini Notebook can't
   upload folders, `HOW_TO_USE.md`). `--notebook NAME` on the commands keeps several plans for the same
   course side by side.
-- Tuning knobs: episode sizes, minutes per question, the recommended size and the size name -> Audio
-  Overview length mapping live at the top of `scripts/udemy.py` (`SIZES`, `RECOMMENDED`,
-  `MIN_PER_QUESTION`, `SETTING`).
+- Tuning knobs: episode sizes, minutes per question, the recommended size, the sizes `plan` offers and
+  the size name -> Audio Overview length mapping live at the top of `scripts/udemy.py` (`SIZES`,
+  `RECOMMENDED`, `OFFERED`, `MIN_PER_QUESTION`, `SETTING`). The focus text template is `FOCUS`: keep it
+  to two sentences (what the listeners prepare for, their background) and let Gemini Notebook do the rest.
 - This playbook is deliberately a strict script because weaker agents improvise. When you change a
   step, keep the SAY/ASK texts self-explanatory and keep the "ask only what is listed" rule.

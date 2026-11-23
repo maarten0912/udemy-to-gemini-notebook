@@ -4,7 +4,7 @@
   python3 scripts/udemy.py import  <udemy-xxx.json> [--name NAME]   # file downloaded by browser/extract.js
   python3 scripts/udemy.py plan    <name> [--exclude 2 3]          # total questions + episode size options
   python3 scripts/udemy.py prepare <name> --episodes N [--size long|default|short] [--exclude 2 3]
-                                   [--exam T] [--subject T]
+                                   [--exam T] [--subject T] [--focus T]
   python3 scripts/udemy.py images  <name>                           # downloads question images to describe
   python3 scripts/udemy.py check   <name>                           # validates topics.json + episode grouping
   python3 scripts/udemy.py build   <name>                           # writes sources/ + HOW_TO_USE.md
@@ -39,10 +39,14 @@ DATA = ROOT / "data"
 OUT = ROOT / "output"
 CHUNK = 100  # questions per tagging chunk
 MAX_TOPIC = 16  # topics larger than this are split into parts in build
-# Guesses (calibrate with the first episode): questions per episode and what that is worth in minutes.
-SIZES = {"long": 90, "default": 45, "short": 20}
-RECOMMENDED = "default"
-MIN_PER_QUESTION = 0.75
+# Questions per episode for each size name, and what a question is worth in minutes. Calibrated on one
+# real run (Databricks): ~47 questions with Audio Overview length "Longer" gave over an hour, while
+# ~45 questions with "Default" went by far too fast. So "long" (Longer) is recommended, "default"
+# (Default length) gets about half the questions, and "short" is only offered on request.
+SIZES = {"long": 45, "default": 22, "short": 10}
+RECOMMENDED = "long"
+OFFERED = ("long", "default")  # the options `plan` presents
+MIN_PER_QUESTION = 1.4
 # The size name the user picks also decides the Audio Overview length setting in Gemini Notebook.
 SETTING = {"long": "Longer", "default": "Default", "short": "Shorter"}
 
@@ -209,7 +213,7 @@ def cmd_plan(args):
           "matter for leaving one out (e.g. one the user already took as a practice run: --exclude N).")
     print("Options (sizes are guesses, calibrate after the first episode):")
     options = {}  # episode count -> size names that lead to it (small courses: long and default can coincide)
-    for key in ("long", "default", "short"):
+    for key in OFFERED:
         options.setdefault(max(1, round(total / SIZES[key])), []).append(key)
     for n, keys in options.items():
         per = round(total / n)
@@ -217,7 +221,7 @@ def cmd_plan(args):
               f"Audio Overview length {' / '.join(SETTING[k] for k in keys)}"
               + ("   <-- recommended" if RECOMMENDED in keys else ""))
     print("Now continue with AGENTS.md, step 3: use its exact wording to ask the user (leave out tests? how many "
-          "episodes? exam and subject?). Then run (add --size <long|default|short> if the user picked a size name):")
+          "episodes? listener text?). Then run (add --size <long|default|short> if the user picked a size name):")
     ex = " --exclude " + " ".join(map(str, excluded)) if excluded else ""
     print(f"  python3 scripts/udemy.py prepare {args.name} --episodes <N> --size <size>{ex} "
           "--exam \"<exam>\" --subject \"<subject>\"")
@@ -284,6 +288,8 @@ def cmd_prepare(args):
     size = args.size or nearest_size(per)  # the size name decides the Audio Overview length setting
     cfg = {"exam": args.exam or title, "subject": args.subject or args.exam or title,
            "tests": included, "excluded": excluded, "episodes": args.episodes, "size": size}
+    if args.focus:
+        cfg["focus"] = args.focus.strip()
     d = OUT / args.name / args.notebook
     (d / "work").mkdir(parents=True, exist_ok=True)
     json.dump(cfg, open(d / "notebook.json", "w"), indent=1, ensure_ascii=False)
@@ -471,26 +477,17 @@ def slug(s):
     return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
 
 
-FOCUS = (
-    "This is a deep dive podcast into the technical details and internals of {subject}, so the listener becomes "
-    "thoroughly familiar with the content of the {exam} exam. Assume a good {subject} background; skip beginner "
-    "explanations. The selected sources are practice questions grouped by topic. Cover every question in all "
-    "selected sources, working through the sources one after another in file-name order. For each question: briefly "
-    "set up the scenario and ask the listener to pick an answer before revealing it, give the correct answer and "
-    "explain at a technical level why it is right (how it works, limits, defaults), explain why each wrong option is "
-    "wrong and what trap makes it tempting, and end with a one-line rule of thumb. Refer to options by their content, "
-    "not by letter. Use only facts from the sources. Finish with a recap of the key points."
-)
-FOCUS_SHORT = (
-    "Deep dive for a listener with a good {subject} background preparing for {exam}. Cover EVERY question in all "
-    "selected sources, source by source in file-name order: set up the scenario, give the correct answer and the "
-    "technical reason, explain why each wrong option is wrong, end with a one-line rule of thumb. Refer to options by "
-    "content, not letter. Only use facts from the sources. End with a recap of the key points."
-)
+# Gemini Notebook figures out the rest by itself, so the focus text is only two sentences: what the
+# listeners are preparing for, and their background. Users are encouraged to make it more personal.
+FOCUS = ("The listeners are preparing for the {exam} exam. "
+         "They already have a good working knowledge of {subject}.")
+
+
+def focus_text(cfg):
+    return cfg.get("focus") or FOCUS.format(subject=cfg["subject"], exam=cfg["exam"])
 
 
 def how_to_use(cfg, episodes):
-    fill = {"subject": cfg["subject"], "exam": cfg["exam"]}
     n_files = sum(len(e["files"]) for e in episodes)
     lines = [
         "# Make your podcast episodes in Gemini Notebook", "",
@@ -513,12 +510,15 @@ def how_to_use(cfg, episodes):
     for e in episodes:
         lines.append(f"| {e['number']} | {e['title']} | `E{e['number']}_` | {e['questions']} | "
                      f"{len(e['files'])} | {notebook_length(cfg)} |")
-    lines += ["", "Rough guide (a guess, calibrate with your first episode): short episodes (about 20 questions, "
-              "length Shorter) make roughly 15 minutes, default ones (about 45 questions, length Default) about "
-              "35 minutes, long ones (about 90 questions, length Longer) about 70 minutes. If the hosts skip "
-              "questions or an episode gets too long, use fewer questions per episode next time.", "",
-              "## Text for the focus box (same for every episode)", "", FOCUS.format(**fill), "",
-              "Shorter version (if the box rejects the long one):", "", FOCUS_SHORT.format(**fill), "",
+    lines += ["", "Rough guide (a guess, calibrate with your first episode): long episodes (about "
+              f"{SIZES['long']} questions, length Longer) run roughly {approx_minutes(SIZES['long'])} minutes, "
+              f"default ones (about {SIZES['default']} questions, length Default) roughly "
+              f"{approx_minutes(SIZES['default'])} minutes. If the hosts skip questions or rush, use fewer "
+              "questions per episode next time.", "",
+              "## Text for the focus box (same for every episode)", "", focus_text(cfg), "",
+              "It is only two sentences on purpose: Gemini Notebook figures out the rest by itself. Make it more "
+              "personal if you like, for example your own experience level, what you find hard, or what you want "
+              "to get out of the podcast.", "",
               "## Topics per episode", ""]
     for e in episodes:
         lines.append(f"**Episode {e['number']}: {e['title']}**")
@@ -596,6 +596,8 @@ def main():
                     "Overview length (short=Shorter, default=Default, long=Longer). Default: nearest to --episodes")
     pr.add_argument("--exclude", type=int, nargs="+", metavar="TEST", help="tests to leave out entirely")
     pr.add_argument("--notebook", default="notebook")
+    pr.add_argument("--focus", help="the two-sentence text for Gemini Notebook's focus box, if the user "
+                    "wrote their own (default: generated from --exam and --subject)")
     pr.add_argument("--exam", help="what the listener is preparing for (default: course title)")
     pr.add_argument("--subject", help="subject area for the podcast, e.g. AWS (default: --exam)")
     for cmd in ("images", "check", "build"):
